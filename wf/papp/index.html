@@ -1,0 +1,57 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <title>Shopping Cart</title>
+    <script>
+        // Load XML file using DOM
+        function loadXMLDoc(filename) {
+            var xhttp = new XMLHttpRequest();
+            xhttp.open("GET", filename, false);
+            xhttp.send();
+            return xhttp.responseXML;
+        }
+
+        // Display customer details from XML
+        function displayCustomerDetails(xml) {
+            var customer = xml.getElementsByTagName("customer")[0];
+            document.getElementById("fname").textContent = customer.getElementsByTagName("fname")[0].childNodes[0].nodeValue;
+            document.getElementById("lname").textContent = customer.getElementsByTagName("lname")[0].childNodes[0].nodeValue;
+            document.getElementById("phoneno").textContent = customer.getElementsByTagName("phoneno")[0].childNodes[0].nodeValue;
+            document.getElementById("address").textContent = customer.getElementsByTagName("address")[0].childNodes[0].nodeValue;
+            document.getElementById("captcha").textContent = customer.getElementsByTagName("capcha")[0].childNodes[0].nodeValue;
+        }
+
+        // Display item list from XML
+        function displayItems(xml) {
+            var items = xml.getElementsByTagName("item");
+            var itemList = document.getElementById("itemlist");
+            itemList.innerHTML = "";
+            for (var i = 0; i < items.length; i++) {
+                var name = items[i].getElementsByTagName("name")[0].childNodes[0].nodeValue;
+                var quantity = items[i].getElementsByTagName("quantity")[0].childNodes[0].nodeValue;
+                itemList.innerHTML += "<li>" + name + " - Quantity: " + quantity + "</li>";
+            }
+        }
+
+        // Load and display data on page load
+        function loadCartData() {
+            var xml = loadXMLDoc("shopping_cart.xml");
+            displayCustomerDetails(xml);
+            displayItems(xml);
+        }
+
+        window.onload = loadCartData;
+    </script>
+</head>
+<body>
+    <h1>SHOPPING CART</h1>
+    <h2>FIRSTNAME: <span id="fname"></span></h2>
+    <h2>LASTNAME: <span id="lname"></span></h2>
+    <h2>PHONENUMBER: <span id="phoneno"></span></h2>
+    <h2>ADDRESS: <span id="address"></span></h2>
+    <h2>CAPTCHA: <span id="captcha"></span></h2>
+
+    <h2>ITEMS:</h2>
+    <ul id="itemlist"></ul>
+</body>
+</html>

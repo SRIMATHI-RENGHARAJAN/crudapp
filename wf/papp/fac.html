@@ -1,0 +1,170 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <script src="https://ajax.googleapis.com/ajax/libs/angularjs/1.6.9/angular.min.js"></script>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            background-color: #f2f2f2;
+            margin: 0;
+            padding: 20px;
+        }
+        h1 {
+            color: #333;
+        }
+        h2 {
+            color: #555;
+            font-size: 18px;
+        }
+        input[type="text"] {
+            padding: 8px;
+            width: 250px;
+            margin-bottom: 10px;
+            border: 1px solid #ccc;
+            border-radius: 4px;
+        }
+        button {
+            background-color: #4CAF50;
+            color: white;
+            padding: 10px 20px;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            margin-top: 10px;
+        }
+        button:hover {
+            background-color: #45a049;
+        }
+        ul {
+            list-style-type: none;
+            padding: 0;
+        }
+        ul li {
+            background-color: #fff;
+            padding: 10px;
+            margin-bottom: 8px;
+            border-radius: 4px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+        }
+        ul li button {
+            background-color: #ff4c4c;
+            padding: 6px 12px;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            color: white;
+        }
+        ul li button:hover {
+            background-color: #ff1a1a;
+        }
+    </style>
+</head>
+<body>
+    <h1>SHOPPING CART</h1>
+
+    <div ng-app="myapp" ng-controller="mycrt">
+        <h2>FIRSTNAME: <input type="text" ng-model="fname"></h2>
+        <h2>LASTNAME: <input type="text" ng-model="lname"></h2>
+        <button ng-click="changename()">CHANGENAME</button>
+
+        <h2>PHONENUMBER: <input type="text" ng-model="phoneno"></h2>
+        <h2>ADDRESS: <input type="text" ng-model="add"></h2>
+        <h2>CAPTCHA: <input type="text" ng-model="capcha"></h2>
+        <h2>ITEM LIST: <input type="text" ng-list="," ng-model="itemlist"></h2>
+
+        <button ng-click="sendCustomerDetails()">SEE CUSTOMER DETAILS</button>
+        <p>{{fname + " " + lname}}</p>
+        <p>{{phoneno}}</p>
+        <p>{{add}}</p>
+
+        <button>SEE ITEMS</button>
+        <p>{{itemlist}}</p>
+
+        <h2>ITEM NAME: <input type="text" ng-model="itemname"></h2>
+        <h2>ITEM QUANTITY: <input type="text" ng-model="quantity"></h2>
+        <button ng-click="additems()">ADD ITEMS</button>
+
+        <ul>
+            <li ng-repeat="item in items">
+                {{item.name}} - {{item.quantity}}
+                <button ng-click="removeitems(item._id)">REMOVE ITEMS</button>
+            </li>
+        </ul>
+    </div>
+
+    <script>
+        var app = angular.module("myapp", []);
+
+        app.controller("mycrt", function($scope, $http, capchaserviceFactory) {
+            $scope.fname = "Srimathi";
+            $scope.lname = "Rengharajan";
+
+            $scope.changename = function() {
+                $scope.fname = "";
+                $scope.lname = "";
+            };
+
+            $scope.phoneno = "";
+            $scope.capcha = capchaserviceFactory.addition(12, 13);  // Using the factory
+            $scope.items = [];  // Initialize items array
+
+            // Fetching items from backend
+            $http.get('http://localhost:3001/get-items')
+                .then(function(response) {
+                    $scope.items = response.data;  // Store fetched items
+                });
+
+            // Add items function (Backend call)
+            $scope.additems = function() {
+                const item = {
+                    name: $scope.itemname,
+                    quantity: $scope.quantity
+                };
+
+                $http.post('http://localhost:3001/add-item', item)
+                    .then(function(response) {
+                        $scope.items.push(response.data.item);  // Add the new item to the local array
+                        $scope.itemname = "";
+                        $scope.quantity = "";
+                    });
+            };
+
+            // Remove items function (Backend call)
+            $scope.removeitems = function(id) {
+                $http.delete(`http://localhost:3001/remove-item/${id}`)
+                    .then(function(response) {
+                        // Remove the item from the local array
+                        $scope.items = $scope.items.filter(item => item._id !== id);
+                    });
+            };
+
+            // Send customer details to backend
+            $scope.sendCustomerDetails = function() {
+                const customer = {
+                    fname: $scope.fname,
+                    lname: $scope.lname,
+                    phoneno: $scope.phoneno,
+                    add: $scope.add
+                };
+
+                $http.post('http://localhost:3001/customer-details', customer)
+                    .then(function(response) {
+                        console.log(response.data.message);
+                    });
+            };
+        });
+
+        // Replacing the service with a factory
+        app.factory("capchaserviceFactory", function() {
+            return {
+                addition: function(a, b) {
+                    return a + b;
+                }
+            };
+        });
+    </script>
+</body>
+</html>

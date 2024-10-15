@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<cart>
+    <customer>
+        <fname>Srimathi</fname>
+        <lname>Rengharajan</lname>
+        <phoneno>1234567890</phoneno>
+        <address>123 Street, City</address>
+        <capcha>25</capcha>
+    </customer>
+    <items>
+        <item>
+            <name>Item1</name>
+            <quantity>2</quantity>
+        </item>
+        <item>
+            <name>Item2</name>
+            <quantity>5</quantity>
+        </item>
+    </items>
+</cart>

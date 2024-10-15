@@ -1,0 +1,643 @@
+mongodb billing.html
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <script src="https://ajax.googleapis.com/ajax/libs/angularjs/1.6.9/angular.min.js"></script>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            background-color: #f2f2f2;
+            margin: 0;
+            padding: 20px;
+        }
+        h1 {
+            color: #333;
+        }
+        h2 {
+            color: #555;
+            font-size: 18px;
+        }
+        input[type="text"] {
+            padding: 8px;
+            width: 250px;
+            margin-bottom: 10px;
+            border: 1px solid #ccc;
+            border-radius: 4px;
+        }
+        button {
+            background-color: #4CAF50;
+            color: white;
+            padding: 10px 20px;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            margin-top: 10px;
+        }
+        button:hover {
+            background-color: #45a049;
+        }
+        ul {
+            list-style-type: none;
+            padding: 0;
+        }
+        ul li {
+            background-color: #fff;
+            padding: 10px;
+            margin-bottom: 8px;
+            border-radius: 4px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+        }
+        ul li button {
+            background-color: #ff4c4c;
+            padding: 6px 12px;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            color: white;
+        }
+        ul li button:hover {
+            background-color: #ff1a1a;
+        }
+    </style>
+</head>
+<body>
+    <h1>SHOPPING CART</h1>
+
+    <div ng-app="myapp" ng-controller="mycrt">
+        <h2>FIRSTNAME: <input type="text" ng-model="fname"></h2>
+        <h2>LASTNAME: <input type="text" ng-model="lname"></h2>
+        <button ng-click="changename()">CHANGENAME</button>
+
+        <h2>PHONENUMBER: <input type="text" ng-model="phoneno"></h2>
+        <h2>ADDRESS: <input type="text" ng-model="add"></h2>
+        <h2>CAPTCHA: <input type="text" ng-model="capcha"></h2>
+        <h2>ITEM LIST: <input type="text" ng-list="," ng-model="itemlist"></h2>
+
+        <button ng-click="sendCustomerDetails()">SEE CUSTOMER DETAILS</button>
+        <p>{{fname + " " + lname}}</p>
+        <p>{{phoneno}}</p>
+        <p>{{add}}</p>
+
+        <button>SEE ITEMS</button>
+        <p>{{itemlist}}</p>
+
+        <h2>ITEM NAME: <input type="text" ng-model="itemname"></h2>
+        <h2>ITEM QUANTITY: <input type="text" ng-model="quantity"></h2>
+        <button ng-click="additems()">ADD ITEMS</button>
+
+        <ul>
+            <li ng-repeat="item in items">
+                {{item.name}} - {{item.quantity}}
+                <button ng-click="removeitems(item._id)">REMOVE ITEMS</button>
+            </li>
+        </ul>
+    </div>
+
+    <script>
+        var app = angular.module("myapp", []);
+
+        app.controller("mycrt", function($scope, $http, capchaservice) {
+            $scope.fname = "Srimathi";
+            $scope.lname = "Rengharajan";
+
+            $scope.changename = function() {
+                $scope.fname = "";
+                $scope.lname = "";
+            };
+
+            $scope.phoneno = "";
+            $scope.capcha = capchaservice.addition(12, 13);
+            $scope.items = [];  // Initialize items array
+
+            // Fetching items from backend
+            $http.get('http://localhost:3001/get-items')
+                .then(function(response) {
+                    $scope.items = response.data;  // Store fetched items
+                });
+
+            // Add items function (Backend call)
+            $scope.additems = function() {
+                const item = {
+                    name: $scope.itemname,
+                    quantity: $scope.quantity
+                };
+
+                $http.post('http://localhost:3001/add-item', item)
+                    .then(function(response) {
+                        $scope.items.push(response.data.item);  // Add the new item to the local array
+                        $scope.itemname = "";
+                        $scope.quantity = "";
+                    });
+            };
+
+            // Remove items function (Backend call)
+            $scope.removeitems = function(id) {
+                $http.delete(`http://localhost:3001/remove-item/${id}`)
+                    .then(function(response) {
+                        // Remove the item from the local array
+                        $scope.items = $scope.items.filter(item => item._id !== id);
+                    });
+            };
+
+            // Send customer details to backend
+            $scope.sendCustomerDetails = function() {
+                const customer = {
+                    fname: $scope.fname,
+                    lname: $scope.lname,
+                    phoneno: $scope.phoneno,
+                    add: $scope.add
+                };
+
+                $http.post('http://localhost:3001/customer-details', customer)
+                    .then(function(response) {
+                        console.log(response.data.message);
+                    });
+            };
+        });
+
+        app.service("capchaservice", function() {
+            this.addition = function(a, b) {
+                return a + b;
+            };
+        });
+    </script>
+</body>
+</html>
+
+
+
+server.js
+
+
+// server.js
+const express = require('express');
+const mongoose = require('mongoose');
+const bodyParser = require('body-parser');
+const cors = require('cors'); // To allow cross-origin requests from AngularJS
+
+const app = express();
+app.use(bodyParser.json());
+app.use(cors());
+
+// Connect to MongoDB (Replace <db_password> with your MongoDB password)
+const dbURI = "mongodb://localhost:27017/shopping";
+
+
+mongoose.connect(dbURI, { useNewUrlParser: true, useUnifiedTopology: true })
+  .then(() => console.log('MongoDB connected'))
+  .catch(err => console.log(err));
+
+// Define a schema and model for the cart items
+const itemSchema = new mongoose.Schema({
+  name: String,
+  quantity: String
+});
+
+const Item = mongoose.model('Item', itemSchema);
+
+// API Routes
+// 1. Add an item
+app.post('/add-item', async (req, res) => {
+  const { name, quantity } = req.body;
+  const newItem = new Item({ name, quantity });
+  await newItem.save();
+  res.json({ message: 'Item added successfully' });
+});
+
+// 2. Get all items
+app.get('/get-items', async (req, res) => {
+  const items = await Item.find();
+  res.json(items);
+});
+
+// 3. Delete an item
+app.delete('/remove-item/:id', async (req, res) => {
+  const { id } = req.params;
+  await Item.findByIdAndDelete(id);
+  res.json({ message: 'Item removed successfully' });
+});
+
+// Start the server
+const PORT = process.env.PORT || 3001;
+app.listen(PORT, () => {
+  console.log(`Server is running on port ${PORT}`);
+});
+
+
+
+s.xml
+
+
+<?xml version="1.0" encoding="UTF-8"?>
+<cart>
+    <customer>
+        <fname>Srimathi</fname>
+        <lname>Rengharajan</lname>
+        <phoneno>1234567890</phoneno>
+        <address>123 Street, City</address>
+        <capcha>25</capcha>
+    </customer>
+    <items>
+        <item>
+            <name>Item1</name>
+            <quantity>2</quantity>
+        </item>
+        <item>
+            <name>Item2</name>
+            <quantity>5</quantity>
+        </item>
+    </items>
+</cart>
+
+
+s.xsl
+
+
+<?xml version="1.0" encoding="UTF-8"?>
+<xsl:stylesheet version="1.0" xmlns:xsl="http://www.w3.org/1999/XSL/Transform">
+    <xsl:template match="/">
+        <html>
+        <head>
+            <title>Shopping Cart</title>
+            <style>
+                body {
+                    font-family: Arial, sans-serif;
+                    background-color: #f2f2f2;
+                    padding: 20px;
+                }
+                h1, h2 {
+                    color: #333;
+                }
+                input[type="text"], button {
+                    padding: 10px;
+                    margin-top: 10px;
+                }
+                ul {
+                    list-style-type: none;
+                }
+                li {
+                    background-color: #fff;
+                    padding: 10px;
+                    margin-bottom: 8px;
+                    border-radius: 4px;
+                }
+            </style>
+        </head>
+        <body>
+            <h1>SHOPPING CART</h1>
+            <h2>FIRSTNAME: <span><xsl:value-of select="cart/customer/fname"/></span></h2>
+            <h2>LASTNAME: <span><xsl:value-of select="cart/customer/lname"/></span></h2>
+            <h2>PHONENUMBER: <span><xsl:value-of select="cart/customer/phoneno"/></span></h2>
+            <h2>ADDRESS: <span><xsl:value-of select="cart/customer/address"/></span></h2>
+            <h2>CAPTCHA: <span><xsl:value-of select="cart/customer/capcha"/></span></h2>
+
+            <h2>ITEMS:</h2>
+            <ul>
+                <xsl:for-each select="cart/items/item">
+                    <li>
+                        <xsl:value-of select="name"/> - Quantity: <xsl:value-of select="quantity"/>
+                    </li>
+                </xsl:for-each>
+            </ul>
+        </body>
+        </html>
+    </xsl:template>
+</xsl:stylesheet>
+
+
+index.html
+
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <title>Shopping Cart</title>
+    <script>
+        // Load XML file using DOM
+        function loadXMLDoc(filename) {
+            var xhttp = new XMLHttpRequest();
+            xhttp.open("GET", filename, false);
+            xhttp.send();
+            return xhttp.responseXML;
+        }
+
+        // Display customer details from XML
+        function displayCustomerDetails(xml) {
+            var customer = xml.getElementsByTagName("customer")[0];
+            document.getElementById("fname").textContent = customer.getElementsByTagName("fname")[0].childNodes[0].nodeValue;
+            document.getElementById("lname").textContent = customer.getElementsByTagName("lname")[0].childNodes[0].nodeValue;
+            document.getElementById("phoneno").textContent = customer.getElementsByTagName("phoneno")[0].childNodes[0].nodeValue;
+            document.getElementById("address").textContent = customer.getElementsByTagName("address")[0].childNodes[0].nodeValue;
+            document.getElementById("captcha").textContent = customer.getElementsByTagName("capcha")[0].childNodes[0].nodeValue;
+        }
+
+        // Display item list from XML
+        function displayItems(xml) {
+            var items = xml.getElementsByTagName("item");
+            var itemList = document.getElementById("itemlist");
+            itemList.innerHTML = "";
+            for (var i = 0; i < items.length; i++) {
+                var name = items[i].getElementsByTagName("name")[0].childNodes[0].nodeValue;
+                var quantity = items[i].getElementsByTagName("quantity")[0].childNodes[0].nodeValue;
+                itemList.innerHTML += "<li>" + name + " - Quantity: " + quantity + "</li>";
+            }
+        }
+
+        // Load and display data on page load
+        function loadCartData() {
+            var xml = loadXMLDoc("shopping_cart.xml");
+            displayCustomerDetails(xml);
+            displayItems(xml);
+        }
+
+        window.onload = loadCartData;
+    </script>
+</head>
+<body>
+    <h1>SHOPPING CART</h1>
+    <h2>FIRSTNAME: <span id="fname"></span></h2>
+    <h2>LASTNAME: <span id="lname"></span></h2>
+    <h2>PHONENUMBER: <span id="phoneno"></span></h2>
+    <h2>ADDRESS: <span id="address"></span></h2>
+    <h2>CAPTCHA: <span id="captcha"></span></h2>
+
+    <h2>ITEMS:</h2>
+    <ul id="itemlist"></ul>
+</body>
+</html>
+
+
+
+factory.html
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <script src="https://ajax.googleapis.com/ajax/libs/angularjs/1.6.9/angular.min.js"></script>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            background-color: #f2f2f2;
+            margin: 0;
+            padding: 20px;
+        }
+        h1 {
+            color: #333;
+        }
+        h2 {
+            color: #555;
+            font-size: 18px;
+        }
+        input[type="text"] {
+            padding: 8px;
+            width: 250px;
+            margin-bottom: 10px;
+            border: 1px solid #ccc;
+            border-radius: 4px;
+        }
+        button {
+            background-color: #4CAF50;
+            color: white;
+            padding: 10px 20px;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            margin-top: 10px;
+        }
+        button:hover {
+            background-color: #45a049;
+        }
+        ul {
+            list-style-type: none;
+            padding: 0;
+        }
+        ul li {
+            background-color: #fff;
+            padding: 10px;
+            margin-bottom: 8px;
+            border-radius: 4px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+        }
+        ul li button {
+            background-color: #ff4c4c;
+            padding: 6px 12px;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            color: white;
+        }
+        ul li button:hover {
+            background-color: #ff1a1a;
+        }
+    </style>
+</head>
+<body>
+    <h1>SHOPPING CART</h1>
+
+    <div ng-app="myapp" ng-controller="mycrt">
+        <h2>FIRSTNAME: <input type="text" ng-model="fname"></h2>
+        <h2>LASTNAME: <input type="text" ng-model="lname"></h2>
+        <button ng-click="changename()">CHANGENAME</button>
+
+        <h2>PHONENUMBER: <input type="text" ng-model="phoneno"></h2>
+        <h2>ADDRESS: <input type="text" ng-model="add"></h2>
+        <h2>CAPTCHA: <input type="text" ng-model="capcha"></h2>
+        <h2>ITEM LIST: <input type="text" ng-list="," ng-model="itemlist"></h2>
+
+        <button ng-click="sendCustomerDetails()">SEE CUSTOMER DETAILS</button>
+        <p>{{fname + " " + lname}}</p>
+        <p>{{phoneno}}</p>
+        <p>{{add}}</p>
+
+        <button>SEE ITEMS</button>
+        <p>{{itemlist}}</p>
+
+        <h2>ITEM NAME: <input type="text" ng-model="itemname"></h2>
+        <h2>ITEM QUANTITY: <input type="text" ng-model="quantity"></h2>
+        <button ng-click="additems()">ADD ITEMS</button>
+
+        <ul>
+            <li ng-repeat="item in items">
+                {{item.name}} - {{item.quantity}}
+                <button ng-click="removeitems(item._id)">REMOVE ITEMS</button>
+            </li>
+        </ul>
+    </div>
+
+    <script>
+        var app = angular.module("myapp", []);
+
+        app.controller("mycrt", function($scope, $http, capchaserviceFactory) {
+            $scope.fname = "Srimathi";
+            $scope.lname = "Rengharajan";
+
+            $scope.changename = function() {
+                $scope.fname = "";
+                $scope.lname = "";
+            };
+
+            $scope.phoneno = "";
+            $scope.capcha = capchaserviceFactory.addition(12, 13);  // Using the factory
+            $scope.items = [];  // Initialize items array
+
+            // Fetching items from backend
+            $http.get('http://localhost:3001/get-items')
+                .then(function(response) {
+                    $scope.items = response.data;  // Store fetched items
+                });
+
+            // Add items function (Backend call)
+            $scope.additems = function() {
+                const item = {
+                    name: $scope.itemname,
+                    quantity: $scope.quantity
+                };
+
+                $http.post('http://localhost:3001/add-item', item)
+                    .then(function(response) {
+                        $scope.items.push(response.data.item);  // Add the new item to the local array
+                        $scope.itemname = "";
+                        $scope.quantity = "";
+                    });
+            };
+
+            // Remove items function (Backend call)
+            $scope.removeitems = function(id) {
+                $http.delete(`http://localhost:3001/remove-item/${id}`)
+                    .then(function(response) {
+                        // Remove the item from the local array
+                        $scope.items = $scope.items.filter(item => item._id !== id);
+                    });
+            };
+
+            // Send customer details to backend
+            $scope.sendCustomerDetails = function() {
+                const customer = {
+                    fname: $scope.fname,
+                    lname: $scope.lname,
+                    phoneno: $scope.phoneno,
+                    add: $scope.add
+                };
+
+                $http.post('http://localhost:3001/customer-details', customer)
+                    .then(function(response) {
+                        console.log(response.data.message);
+                    });
+            };
+        });
+
+        // Replacing the service with a factory
+        app.factory("capchaserviceFactory", function() {
+            return {
+                addition: function(a, b) {
+                    return a + b;
+                }
+            };
+        });
+    </script>
+</body>
+</html>
+
+
+readme
+
+
+npm install -g http-server
+http-server .
+Available on:
+  http://192.168.56.1:8080
+  http://192.168.247.194:8080
+  http://127.0.0.1:8080
+
+npm init -y
+npm install express mongoose body-parser cors
+node ser.js
+
+
+domparser.html
+
+
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>XML DOM Parser Example</title>
+</head>
+<body>
+
+    <h1>Parsed XML Data</h1>
+    <div id="customerDetails"></div>
+    <ul id="itemsList"></ul>
+
+    <script>
+        // The XML string
+        var xmlString = `
+        <?xml version="1.0" encoding="UTF-8"?>
+        <cart>
+            <customer>
+                <fname>Srimathi</fname>
+                <lname>Rengharajan</lname>
+                <phoneno>1234567890</phoneno>
+                <address>123 Street, City</address>
+                <capcha>25</capcha>
+            </customer>
+            <items>
+                <item>
+                    <name>Item1</name>
+                    <quantity>2</quantity>
+                </item>
+                <item>
+                    <name>Item2</name>
+                    <quantity>5</quantity>
+                </item>
+            </items>
+        </cart>`;
+
+        // Parsing the XML string into a DOM object
+        var parser = new DOMParser();
+        var xmlDoc = parser.parseFromString(xmlString, "text/xml");
+
+        // Extract customer details
+        var fname = xmlDoc.getElementsByTagName("fname")[0].textContent;
+        var lname = xmlDoc.getElementsByTagName("lname")[0].textContent;
+        var phoneno = xmlDoc.getElementsByTagName("phoneno")[0].textContent;
+        var address = xmlDoc.getElementsByTagName("address")[0].textContent;
+        var capcha = xmlDoc.getElementsByTagName("capcha")[0].textContent;
+
+        // Display customer details
+        var customerDetails = `
+            <h2>Customer Details:</h2>
+            <p>First Name: ${fname}</p>
+            <p>Last Name: ${lname}</p>
+            <p>Phone Number: ${phoneno}</p>
+            <p>Address: ${address}</p>
+            <p>Captcha: ${capcha}</p>
+        `;
+        document.getElementById("customerDetails").innerHTML = customerDetails;
+
+        // Extract and display items
+        var items = xmlDoc.getElementsByTagName("item");
+        var itemList = document.getElementById("itemsList");
+        var itemHtml = "<h2>Items:</h2>";
+
+        for (var i = 0; i < items.length; i++) {
+            var itemName = items[i].getElementsByTagName("name")[0].textContent;
+            var itemQuantity = items[i].getElementsByTagName("quantity")[0].textContent;
+
+            itemHtml += `<li>${itemName} - Quantity: ${itemQuantity}</li>`;
+        }
+
+        itemList.innerHTML = itemHtml;
+    </script>
+
+</body>
+</html>
